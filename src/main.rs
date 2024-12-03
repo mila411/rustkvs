@@ -50,12 +50,13 @@ fn process_command(
             let key = parts.next();
             let value: Vec<&str> = parts.collect();
             if key.is_none() && value.is_empty() {
-                return "Error: 'set' コマンドには <key> と <value> が必要です。\n使用方法: set <key> <value>".to_string();
+                return "Error: The 'set' command requires <key> and <value>.\nUsage: set <key> <value>".to_string();
             } else if key.is_none() {
-                return "Error: 'set' コマンドには <key> が必要です。\n使用方法: set <key> <value>"
+                return "Error: The 'set' command requires <key>.\nUsage: set <key> <value>"
                     .to_string();
             } else if value.is_empty() {
-                return "Error: 'set' コマンドには <value> が必要です。\n使用方法: set <key> <value>".to_string();
+                return "Error: The 'set' command requires <value>.\nUsage: set <key> <value>"
+                    .to_string();
             }
             let key = key.unwrap();
             let value_str = value.join(" ");
@@ -65,7 +66,7 @@ fn process_command(
                     store.insert(key.to_string(), val.clone());
                     format!("Set key '{}' with value '{:?}'", key, val)
                 }
-                None => "Error: サポートされていない値の型です。\nサポートされている型: String, Integer, Boolean, Map, List, Set".to_string(),
+                None => "Error: Unsupported value type.\nSupported types: String, Integer, Boolean, Map, List, Set".to_string(),
             }
         }
         Some("get") => {
@@ -73,11 +74,9 @@ fn process_command(
             match key {
                 Some(k) => match store.get(k) {
                     Some(v) => format!("Value for key '{}': '{:?}'", k, v),
-                    None => format!("Error: Key '{}' が見つかりません。", k),
+                    None => format!("Error: Key '{}' was not found.", k),
                 },
-                None => {
-                    "Error: 'get' コマンドには <key> が必要です。\n使用方法: get <key>".to_string()
-                }
+                None => "Error: The 'get' command requires <key>.\nUsage: get <key>".to_string(),
             }
         }
         Some("delete") => {
@@ -87,26 +86,27 @@ fn process_command(
                     if store.remove(k).is_some() {
                         format!("Key '{}' deleted.", k)
                     } else {
-                        format!("Error: Key '{}' が見つかりません。", k)
+                        format!("Error: Key '{}' was not found.", k)
                     }
                 }
-                None => "Error: 'delete' コマンドには <key> が必要です。\n使用方法: delete <key>"
-                    .to_string(),
+                None => {
+                    "Error: The 'delete' command requires <key>.\nUsage: delete <key>".to_string()
+                }
             }
         }
         Some("update") => {
             let key = parts.next();
             let value: Vec<&str> = parts.collect();
             if key.is_none() && value.is_empty() {
-                return "Error: 'update' コマンドには <key> と <new_value> が必要です。\n使用方法: update <key> <new_value>".to_string();
+                return "Error: The 'update' command requires <key> and <new_value>.\nUsage: update <key> <new_value>".to_string();
             } else if key.is_none() {
-                return "Error: 'update' コマンドには <key> が必要です。\n使用方法: update <key> <new_value>".to_string();
+                return "Error: The 'update' command requires <key>.\nUsage: update <key> <new_value>".to_string();
             } else if value.is_empty() {
-                return "Error: 'update' コマンドには <new_value> が必要です。\n使用方法: update <key> <new_value>".to_string();
+                return "Error: The 'update' command requires <new_value>.\nUsage: update <key> <new_value>".to_string();
             }
             let key = key.unwrap();
             if !store.contains_key(key) {
-                return format!("Error: Key '{}' は存在しません。", key);
+                return format!("Error: Key '{}' does not exist.", key);
             }
             let value_str = value.join(" ");
             let parsed_value = parse_value(&value_str);
@@ -115,13 +115,14 @@ fn process_command(
                     store.insert(key.to_string(), val.clone());
                     format!("Updated key '{}' with new value '{:?}'", key, val)
                 }
-                None => "Error: サポートされていない値の型です。\nサポートされている型: String, Integer, Boolean, Map, List, Set".to_string(),
+                None => "Error: Unsupported value type.\nSupported types: String, Integer, Boolean, Map, List, Set".to_string(),
             }
         }
         Some("list") => {
             let extra_args: Vec<&str> = parts.collect();
             if !extra_args.is_empty() {
-                return "Error: 'list' コマンドには引数が不要です。\n使用方法: list".to_string();
+                return "Error: The 'list' command does not take any arguments.\nUsage: list"
+                    .to_string();
             }
             if store.is_empty() {
                 "Store is empty.".to_string()
@@ -133,24 +134,25 @@ fn process_command(
         Some("help") => {
             let extra_args: Vec<&str> = parts.collect();
             if !extra_args.is_empty() {
-                return "Error: 'help' コマンドには引数が不要です。\n使用方法: help".to_string();
+                return "Error: The 'help' command does not take any arguments.\nUsage: help"
+                    .to_string();
             }
             format!(
-                "利用可能なコマンド:\n\
-                - set <key> <value>: キーと値をストアに設定します。\n\
-                - get <key>: 指定したキーの値を取得します。\n\
-                - delete <key>: 指定したキーをストアから削除します。\n\
-                - update <key> <new_value>: 既存のキーの値を更新します。\n\
-                - list: 現在保存されている全てのキーを一覧表示します。\n\
-                - history: 実行したコマンドの履歴を表示します。\n\
-                - help: 利用可能なコマンドとその説明を表示します。\n\
-                - exit: プログラムを終了します。"
+                "Available commands:\n\
+                - set <key> <value>: Sets a key-value pair in the store.\n\
+                - get <key>: Retrieves the value for the specified key.\n\
+                - delete <key>: Removes the specified key from the store.\n\
+                - update <key> <new_value>: Updates the value of an existing key.\n\
+                - list: Lists all keys currently in the store.\n\
+                - history: Displays the history of executed commands.\n\
+                - help: Displays available commands and their descriptions.\n\
+                - exit: Exits the program."
             )
         }
         Some("history") => {
             let extra_args: Vec<&str> = parts.collect();
             if !extra_args.is_empty() {
-                return "Error: 'history' コマンドには引数が不要です。\n使用方法: history"
+                return "Error: The 'history' command does not take any arguments.\nUsage: history"
                     .to_string();
             }
             if history.is_empty() {
@@ -170,9 +172,7 @@ fn process_command(
             "Error: Unknown command '{}'.\nUse 'help' to see available commands.",
             cmd
         ),
-        None => {
-            "Error: コマンドを入力してください。\nUse 'help' to see available commands.".to_string()
-        }
+        None => "Error: Please enter a command.\nUse 'help' to see available commands.".to_string(),
     }
 }
 
@@ -189,7 +189,7 @@ fn parse_value(input: &str) -> Option<Value> {
     if input.starts_with('"') && input.ends_with('"') {
         return Some(Value::String(input.trim_matches('"').to_string()));
     }
-    // 他の型のパースロジックを追加
+    // Add parsing logic for other types
     None
 }
 
@@ -212,7 +212,7 @@ mod tests {
         let mut store = BTreeMap::new();
         let history = Vec::new();
         let output = process_command(&mut store, "delete key2", &history);
-        assert_eq!(output, "Error: Key 'key2' が見つかりません。");
+        assert_eq!(output, "Error: Key 'key2' was not found.");
     }
 
     #[test]
@@ -222,7 +222,7 @@ mod tests {
         let output = process_command(&mut store, "delete", &history);
         assert_eq!(
             output,
-            "Error: 'delete' コマンドには <key> が必要です。\n使用方法: delete <key>"
+            "Error: The 'delete' command requires <key>.\nUsage: delete <key>"
         );
     }
 
@@ -247,7 +247,7 @@ mod tests {
         let mut store = BTreeMap::new();
         let history = Vec::new();
         let output = process_command(&mut store, "update key2 100", &history);
-        assert_eq!(output, "Error: Key 'key2' は存在しません。");
+        assert_eq!(output, "Error: Key 'key2' does not exist.");
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod tests {
         let output = process_command(&mut store, "update key3", &history);
         assert_eq!(
             output,
-            "Error: 'update' コマンドには <new_value> が必要です。\n使用方法: update <key> <new_value>"
+            "Error: The 'update' command requires <new_value>.\nUsage: update <key> <new_value>"
         );
     }
 
@@ -286,7 +286,7 @@ mod tests {
         let output = process_command(&mut store, "list extra_arg", &history);
         assert_eq!(
             output,
-            "Error: 'list' コマンドには引数が不要です。\n使用方法: list"
+            "Error: The 'list' command does not take any arguments.\nUsage: list"
         );
     }
 
@@ -295,15 +295,15 @@ mod tests {
         let mut store = BTreeMap::new();
         let history = Vec::new();
         let output = process_command(&mut store, "help", &history);
-        let expected_output = "利用可能なコマンド:\n\
-                                - set <key> <value>: キーと値をストアに設定します。\n\
-                                - get <key>: 指定したキーの値を取得します。\n\
-                                - delete <key>: 指定したキーをストアから削除します。\n\
-                                - update <key> <new_value>: 既存のキーの値を更新します。\n\
-                                - list: 現在保存されている全てのキーを一覧表示します。\n\
-                                - history: 実行したコマンドの履歴を表示します。\n\
-                                - help: 利用可能なコマンドとその説明を表示します。\n\
-                                - exit: プログラムを終了します。";
+        let expected_output = "Available commands:\n\
+                                - set <key> <value>: Sets a key-value pair in the store.\n\
+                                - get <key>: Retrieves the value for the specified key.\n\
+                                - delete <key>: Removes the specified key from the store.\n\
+                                - update <key> <new_value>: Updates the value of an existing key.\n\
+                                - list: Lists all keys currently in the store.\n\
+                                - history: Displays the history of executed commands.\n\
+                                - help: Displays available commands and their descriptions.\n\
+                                - exit: Exits the program.";
         assert_eq!(output, expected_output);
     }
 
@@ -314,7 +314,7 @@ mod tests {
         let output = process_command(&mut store, "help extra_arg", &history);
         assert_eq!(
             output,
-            "Error: 'help' コマンドには引数が不要です。\n使用方法: help"
+            "Error: The 'help' command does not take any arguments.\nUsage: help"
         );
     }
 
@@ -344,7 +344,7 @@ mod tests {
         let output = process_command(&mut store, "history extra_arg", &history);
         assert_eq!(
             output,
-            "Error: 'history' コマンドには引数が不要です。\n使用方法: history"
+            "Error: The 'history' command does not take any arguments.\nUsage: history"
         );
     }
 
@@ -366,7 +366,7 @@ mod tests {
         let output = process_command(&mut store, "", &history);
         assert_eq!(
             output,
-            "Error: コマンドを入力してください。\nUse 'help' to see available commands."
+            "Error: Please enter a command.\nUse 'help' to see available commands."
         );
     }
 
@@ -394,15 +394,12 @@ mod tests {
     fn test_set_and_get_string() {
         let mut store = BTreeMap::new();
         let history = Vec::new();
-        let output_set = process_command(&mut store, "set greeting \"こんにちは\"", &history);
+        let output_set = process_command(&mut store, "set greeting \"Hello\"", &history);
         assert_eq!(
             output_set,
-            "Set key 'greeting' with value 'String(\"こんにちは\")'"
+            "Set key 'greeting' with value 'String(\"Hello\")'"
         );
         let output_get = process_command(&mut store, "get greeting", &history);
-        assert_eq!(
-            output_get,
-            "Value for key 'greeting': 'String(\"こんにちは\")'"
-        );
+        assert_eq!(output_get, "Value for key 'greeting': 'String(\"Hello\")'");
     }
 }
