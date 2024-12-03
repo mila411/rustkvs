@@ -1,0 +1,19 @@
+1. Persistence of data
+Explanation: In the current implementation, data is only held in memory, and is lost when the program ends.
+Countermeasure: Add a function to save and load data to/from files or databases.
+
+2. Support for concurrent processing
+Explanation: The current implementation is single-threaded and does not support simultaneous access from multiple clients.
+Countermeasure: Use thread-safe data structures to enable concurrent access.
+
+3. User authentication and access control
+Explanation: Anyone can access the KVS.
+Countermeasure: Add user authentication functionality to manage access privileges.
+
+4. Logging errors
+Explanation: There is no function to log errors that occur.
+Countermeasure: Introduce a logging library to log errors and important events to a log file.
+
+5. Expand testing
+Explanation: Current testing is limited to basic functions.
+Countermeasure: Add test cases that include abnormal cases and edge cases to improve the reliability of KVS.
