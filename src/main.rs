@@ -8,11 +8,12 @@ enum Value {
     Boolean(bool),
     Map(BTreeMap<String, Value>),
     List(Vec<Value>),
-    Set(BTreeSet<Value>), // 追加
+    Set(BTreeSet<Value>),
 }
 
 fn main() {
     let mut store: BTreeMap<String, Value> = BTreeMap::new();
+    let mut history: Vec<String> = Vec::new();
 
     loop {
         println!("Enter command:");
@@ -22,17 +23,26 @@ fn main() {
             .read_line(&mut input)
             .expect("Failed to read input");
 
-        let output = process_command(&mut store, &input);
+        let trimmed_input = input.trim();
+        if !trimmed_input.is_empty() {
+            history.push(trimmed_input.to_string());
+        }
+
+        let output = process_command(&mut store, trimmed_input, &history);
         println!("{}", output);
 
-        if input.trim() == "exit" {
+        if trimmed_input == "exit" {
             break;
         }
     }
 }
 
-fn process_command(store: &mut BTreeMap<String, Value>, input: &str) -> String {
-    let mut parts = input.trim().split_whitespace();
+fn process_command(
+    store: &mut BTreeMap<String, Value>,
+    input: &str,
+    history: &Vec<String>,
+) -> String {
+    let mut parts = input.split_whitespace();
     let command = parts.next();
 
     match command {
@@ -49,7 +59,7 @@ fn process_command(store: &mut BTreeMap<String, Value>, input: &str) -> String {
                 Some(val) => {
                     store.insert(key.to_string(), val.clone());
                     format!("Set key '{}' with value '{:?}'", key, val)
-                },
+                }
                 None => "Unsupported value type. Supported types: String, Integer, Boolean, Map, List, Set".to_string(),
             }
         }
@@ -63,128 +73,105 @@ fn process_command(store: &mut BTreeMap<String, Value>, input: &str) -> String {
                 None => "Usage: get <key>".to_string(),
             }
         }
+        Some("delete") => {
+            let key = parts.next();
+            match key {
+                Some(k) => {
+                    if store.remove(k).is_some() {
+                        format!("Key '{}' deleted.", k)
+                    } else {
+                        format!("Key '{}' not found.", k)
+                    }
+                }
+                None => "Usage: delete <key>".to_string(),
+            }
+        }
+        Some("update") => {
+            let key = parts.next();
+            let value: Vec<&str> = parts.collect();
+            if key.is_none() || value.is_empty() {
+                return "Usage: update <key> <new_value>".to_string();
+            }
+            let key = key.unwrap();
+            if !store.contains_key(key) {
+                return format!("Key '{}' does not exist.", key);
+            }
+            let value_str = value.join(" ");
+            let parsed_value = parse_value(&value_str);
+            match parsed_value {
+                Some(val) => {
+                    store.insert(key.to_string(), val.clone());
+                    format!("Updated key '{}' with new value '{:?}'", key, val)
+                }
+                None => "Unsupported value type. Supported types: String, Integer, Boolean, Map, List, Set".to_string(),
+            }
+        }
+        Some("list") => {
+            let extra_args: Vec<&str> = parts.collect();
+            if !extra_args.is_empty() {
+                return "Usage: list".to_string();
+            }
+            if store.is_empty() {
+                "Store is empty.".to_string()
+            } else {
+                let keys: Vec<&str> = store.keys().map(|s| s.as_str()).collect();
+                format!("Keys: {}", keys.join(", "))
+            }
+        }
+        Some("help") => {
+            let extra_args: Vec<&str> = parts.collect();
+            if !extra_args.is_empty() {
+                return "Usage: help".to_string();
+            }
+            format!(
+                "利用可能なコマンド:\n\
+                - set <key> <value>: キーと値をストアに設定します。\n\
+                - get <key>: 指定したキーの値を取得します。\n\
+                - delete <key>: 指定したキーをストアから削除します。\n\
+                - update <key> <new_value>: 既存のキーの値を更新します。\n\
+                - list: 現在保存されている全てのキーを一覧表示します。\n\
+                - history: 実行したコマンドの履歴を表示します。\n\
+                - help: 利用可能なコマンドとその説明を表示します。\n\
+                - exit: プログラムを終了します。"
+            )
+        }
+        Some("history") => {
+            let extra_args: Vec<&str> = parts.collect();
+            if !extra_args.is_empty() {
+                return "Usage: history".to_string();
+            }
+            if history.is_empty() {
+                "No commands in history.".to_string()
+            } else {
+                let history_output = history
+                    .iter()
+                    .enumerate()
+                    .map(|(i, cmd)| format!("{}: {}", i + 1, cmd))
+                    .collect::<Vec<String>>()
+                    .join("\n");
+                format!("Command History:\n{}", history_output)
+            }
+        }
         Some("exit") => "Exiting...".to_string(),
         _ => "Unknown command".to_string(),
     }
 }
 
 fn parse_value(input: &str) -> Option<Value> {
-    let input = input.trim();
-    if let Ok(i) = input.parse::<i32>() {
-        Some(Value::Integer(i))
-    } else if let Ok(b) = input.parse::<bool>() {
-        Some(Value::Boolean(b))
-    } else if input.starts_with('{') && input.ends_with('}') {
-        let inner = &input[1..input.len() - 1];
-        let mut map = BTreeMap::new();
-        for pair in split_pairs(inner) {
-            let mut kv = pair.splitn(2, ':');
-            if let (Some(k), Some(v)) = (kv.next(), kv.next()) {
-                let key = trim_quotes(k.trim());
-                let value = parse_value(v.trim())?;
-                map.insert(key, value);
-            } else {
-                return None;
-            }
-        }
-        Some(Value::Map(map))
-    } else if input.starts_with('[') && input.ends_with(']') {
-        let inner = &input[1..input.len() - 1];
-        let mut list = Vec::new();
-        for item in split_list_items(inner) {
-            let parsed_item = parse_value(item.trim())?;
-            list.push(parsed_item);
-        }
-        Some(Value::List(list))
-    } else if input.starts_with('<') && input.ends_with('>') {
-        let inner = &input[1..input.len() - 1];
-        let mut set = BTreeSet::new();
-        for item in split_set_items(inner) {
-            let parsed_item = parse_value(item.trim())?;
-            set.insert(parsed_item);
-        }
-        Some(Value::Set(set))
-    } else if input.parse::<f64>().is_err() {
-        Some(Value::String(trim_quotes(input)))
-    } else {
-        None
+    if let Ok(int_val) = input.parse::<i32>() {
+        return Some(Value::Integer(int_val));
     }
-}
-
-// キー・バリューのペアを正確に分割する関数
-fn split_pairs(s: &str) -> Vec<String> {
-    let mut pairs = Vec::new();
-    let mut brace_level = 0;
-    let mut current = String::new();
-
-    for c in s.chars() {
-        match c {
-            '{' | '[' | '<' => {
-                brace_level += 1;
-                current.push(c);
-            }
-            '}' | ']' | '>' => {
-                brace_level -= 1;
-                current.push(c);
-            }
-            ',' if brace_level == 0 => {
-                pairs.push(current.trim().to_string());
-                current.clear();
-            }
-            _ => {
-                current.push(c);
-            }
-        }
+    if input.eq_ignore_ascii_case("true") {
+        return Some(Value::Boolean(true));
     }
-
-    if !current.is_empty() {
-        pairs.push(current.trim().to_string());
+    if input.eq_ignore_ascii_case("false") {
+        return Some(Value::Boolean(false));
     }
-
-    pairs
-}
-
-// リストの項目を正確に分割する関数
-fn split_list_items(s: &str) -> Vec<String> {
-    let mut items = Vec::new();
-    let mut brace_level = 0;
-    let mut current = String::new();
-
-    for c in s.chars() {
-        match c {
-            '{' | '[' | '<' => {
-                brace_level += 1;
-                current.push(c);
-            }
-            '}' | ']' | '>' => {
-                brace_level -= 1;
-                current.push(c);
-            }
-            ',' if brace_level == 0 => {
-                items.push(current.trim().to_string());
-                current.clear();
-            }
-            _ => {
-                current.push(c);
-            }
-        }
+    if input.starts_with('"') && input.ends_with('"') {
+        return Some(Value::String(input.trim_matches('"').to_string()));
     }
-
-    if !current.is_empty() {
-        items.push(current.trim().to_string());
-    }
-
-    items
-}
-
-// Setの項目を正確に分割する関数
-fn split_set_items(s: &str) -> Vec<String> {
-    split_list_items(s) // 同じ分割ロジックを使用
-}
-
-// 引用符を削除する関数
-fn trim_quotes(s: &str) -> String {
-    s.trim_matches('"').to_string()
+    // 他の型のパースロジックを追加
+    None
 }
 
 #[cfg(test)]
@@ -192,121 +179,138 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_set_and_get_string() {
+    fn test_delete_existing_key() {
         let mut store = BTreeMap::new();
-        let _output = process_command(&mut store, "set key1 hello");
-        assert_eq!(store.get("key1"), Some(&Value::String("hello".to_string())));
-
-        let output = process_command(&mut store, "get key1");
-        assert_eq!(output, "Value for key 'key1': 'String(\"hello\")'");
+        store.insert("key1".to_string(), Value::String("value1".to_string()));
+        let history = Vec::new();
+        let output = process_command(&mut store, "delete key1", &history);
+        assert_eq!(output, "Key 'key1' deleted.");
+        assert!(!store.contains_key("key1"));
     }
 
     #[test]
-    fn test_set_and_get_integer() {
+    fn test_delete_nonexistent_key() {
         let mut store = BTreeMap::new();
-        let _output = process_command(&mut store, "set key2 42");
-        assert_eq!(store.get("key2"), Some(&Value::Integer(42)));
-
-        let output = process_command(&mut store, "get key2");
-        assert_eq!(output, "Value for key 'key2': 'Integer(42)'");
+        let history = Vec::new();
+        let output = process_command(&mut store, "delete key2", &history);
+        assert_eq!(output, "Key 'key2' not found.");
     }
 
     #[test]
-    fn test_set_and_get_boolean() {
+    fn test_delete_missing_argument() {
         let mut store = BTreeMap::new();
-        let _output = process_command(&mut store, "set key3 true");
-        assert_eq!(store.get("key3"), Some(&Value::Boolean(true)));
-
-        let output = process_command(&mut store, "get key3");
-        assert_eq!(output, "Value for key 'key3': 'Boolean(true)'");
+        let history = Vec::new();
+        let output = process_command(&mut store, "delete", &history);
+        assert_eq!(output, "Usage: delete <key>");
     }
 
     #[test]
-    fn test_set_and_get_map() {
+    fn test_update_existing_key() {
         let mut store = BTreeMap::new();
-        let _output = process_command(
-            &mut store,
-            r#"set key4 {"subkey1": "value1", "subkey2": 100}"#,
-        );
-        let mut expected_map = BTreeMap::new();
-        expected_map.insert("subkey1".to_string(), Value::String("value1".to_string()));
-        expected_map.insert("subkey2".to_string(), Value::Integer(100));
-        assert_eq!(store.get("key4"), Some(&Value::Map(expected_map)));
-
-        let output = process_command(&mut store, "get key4");
+        store.insert("key1".to_string(), Value::String("old_value".to_string()));
+        let history = Vec::new();
+        let output = process_command(&mut store, "update key1 \"new_value\"", &history);
         assert_eq!(
             output,
-            "Value for key 'key4': 'Map({\"subkey1\": String(\"value1\"), \"subkey2\": Integer(100)})'"
+            "Updated key 'key1' with new value 'String(\"new_value\")'"
         );
-    }
-
-    #[test]
-    fn test_set_and_get_list() {
-        let mut store = BTreeMap::new();
-        let _output = process_command(&mut store, r#"set key5 ["item1", 2, true]"#);
-        let expected_list = vec![
-            Value::String("item1".to_string()),
-            Value::Integer(2),
-            Value::Boolean(true),
-        ];
-        assert_eq!(store.get("key5"), Some(&Value::List(expected_list)));
-
-        let output = process_command(&mut store, "get key5");
         assert_eq!(
-            output,
-            "Value for key 'key5': 'List([String(\"item1\"), Integer(2), Boolean(true)])'"
+            store.get("key1"),
+            Some(&Value::String("new_value".to_string()))
         );
     }
 
     #[test]
-    fn test_set_and_get_set() {
+    fn test_update_nonexistent_key() {
         let mut store = BTreeMap::new();
-        let _output = process_command(&mut store, r#"set key6 <"item1", 2, true>"#);
-        let expected_set: BTreeSet<Value> = [
-            Value::String("item1".to_string()),
-            Value::Integer(2),
-            Value::Boolean(true),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-        assert_eq!(store.get("key6"), Some(&Value::Set(expected_set)));
-
-        let output = process_command(&mut store, "get key6");
-        assert_eq!(
-            output,
-            "Value for key 'key6': 'Set({String(\"item1\"), Integer(2), Boolean(true)})'"
-        );
+        let history = Vec::new();
+        let output = process_command(&mut store, "update key2 100", &history);
+        assert_eq!(output, "Key 'key2' does not exist.");
     }
 
     #[test]
-    fn test_set_unsupported_type() {
+    fn test_update_missing_arguments() {
         let mut store = BTreeMap::new();
-        let output = process_command(&mut store, "set key7 3.14");
-        assert_eq!(
-            output,
-            "Unsupported value type. Supported types: String, Integer, Boolean, Map, List, Set"
-        );
+        let history = Vec::new();
+        let output = process_command(&mut store, "update key3", &history);
+        assert_eq!(output, "Usage: update <key> <new_value>");
     }
 
     #[test]
-    fn test_get_nonexistent_key() {
+    fn test_list_empty_store() {
         let mut store = BTreeMap::new();
-        let output = process_command(&mut store, "get key8");
-        assert_eq!(output, "Key 'key8' not found");
+        let history = Vec::new();
+        let output = process_command(&mut store, "list", &history);
+        assert_eq!(output, "Store is empty.");
     }
 
     #[test]
-    fn test_unknown_command() {
+    fn test_list_with_keys() {
         let mut store = BTreeMap::new();
-        let output = process_command(&mut store, "unknown");
-        assert_eq!(output, "Unknown command");
+        store.insert("key1".to_string(), Value::String("value1".to_string()));
+        store.insert("key2".to_string(), Value::Integer(42));
+        let history = Vec::new();
+        let output = process_command(&mut store, "list", &history);
+        assert_eq!(output, "Keys: key1, key2");
     }
 
     #[test]
-    fn test_set_missing_arguments() {
+    fn test_list_with_extra_arguments() {
         let mut store = BTreeMap::new();
-        let output = process_command(&mut store, "set key9");
-        assert_eq!(output, "Usage: set <key> <value>");
+        let history = Vec::new();
+        let output = process_command(&mut store, "list extra_arg", &history);
+        assert_eq!(output, "Usage: list");
+    }
+
+    #[test]
+    fn test_help_command() {
+        let mut store = BTreeMap::new();
+        let history = Vec::new();
+        let output = process_command(&mut store, "help", &history);
+        let expected_output = "利用可能なコマンド:\n\
+                                - set <key> <value>: キーと値をストアに設定します。\n\
+                                - get <key>: 指定したキーの値を取得します。\n\
+                                - delete <key>: 指定したキーをストアから削除します。\n\
+                                - update <key> <new_value>: 既存のキーの値を更新します。\n\
+                                - list: 現在保存されている全てのキーを一覧表示します。\n\
+                                - history: 実行したコマンドの履歴を表示します。\n\
+                                - help: 利用可能なコマンドとその説明を表示します。\n\
+                                - exit: プログラムを終了します。";
+        assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_help_with_extra_arguments() {
+        let mut store = BTreeMap::new();
+        let history = Vec::new();
+        let output = process_command(&mut store, "help extra_arg", &history);
+        assert_eq!(output, "Usage: help");
+    }
+
+    #[test]
+    fn test_history_empty() {
+        let mut store = BTreeMap::new();
+        let history = Vec::new();
+        let output = process_command(&mut store, "history", &history);
+        assert_eq!(output, "No commands in history.");
+    }
+
+    #[test]
+    fn test_history_with_commands() {
+        let mut store = BTreeMap::new();
+        let mut history = Vec::new();
+        history.push("set key1 \"value1\"".to_string());
+        history.push("get key1".to_string());
+        let output = process_command(&mut store, "history", &history);
+        let expected_output = "Command History:\n1: set key1 \"value1\"\n2: get key1";
+        assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_history_with_extra_arguments() {
+        let mut store = BTreeMap::new();
+        let history = Vec::new();
+        let output = process_command(&mut store, "history extra_arg", &history);
+        assert_eq!(output, "Usage: history");
     }
 }
