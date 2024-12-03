@@ -49,8 +49,13 @@ fn process_command(
         Some("set") => {
             let key = parts.next();
             let value: Vec<&str> = parts.collect();
-            if key.is_none() || value.is_empty() {
-                return "Usage: set <key> <value>".to_string();
+            if key.is_none() && value.is_empty() {
+                return "Error: 'set' コマンドには <key> と <value> が必要です。\n使用方法: set <key> <value>".to_string();
+            } else if key.is_none() {
+                return "Error: 'set' コマンドには <key> が必要です。\n使用方法: set <key> <value>"
+                    .to_string();
+            } else if value.is_empty() {
+                return "Error: 'set' コマンドには <value> が必要です。\n使用方法: set <key> <value>".to_string();
             }
             let key = key.unwrap();
             let value_str = value.join(" ");
@@ -60,7 +65,7 @@ fn process_command(
                     store.insert(key.to_string(), val.clone());
                     format!("Set key '{}' with value '{:?}'", key, val)
                 }
-                None => "Unsupported value type. Supported types: String, Integer, Boolean, Map, List, Set".to_string(),
+                None => "Error: サポートされていない値の型です。\nサポートされている型: String, Integer, Boolean, Map, List, Set".to_string(),
             }
         }
         Some("get") => {
@@ -68,9 +73,11 @@ fn process_command(
             match key {
                 Some(k) => match store.get(k) {
                     Some(v) => format!("Value for key '{}': '{:?}'", k, v),
-                    None => format!("Key '{}' not found", k),
+                    None => format!("Error: Key '{}' が見つかりません。", k),
                 },
-                None => "Usage: get <key>".to_string(),
+                None => {
+                    "Error: 'get' コマンドには <key> が必要です。\n使用方法: get <key>".to_string()
+                }
             }
         }
         Some("delete") => {
@@ -80,21 +87,26 @@ fn process_command(
                     if store.remove(k).is_some() {
                         format!("Key '{}' deleted.", k)
                     } else {
-                        format!("Key '{}' not found.", k)
+                        format!("Error: Key '{}' が見つかりません。", k)
                     }
                 }
-                None => "Usage: delete <key>".to_string(),
+                None => "Error: 'delete' コマンドには <key> が必要です。\n使用方法: delete <key>"
+                    .to_string(),
             }
         }
         Some("update") => {
             let key = parts.next();
             let value: Vec<&str> = parts.collect();
-            if key.is_none() || value.is_empty() {
-                return "Usage: update <key> <new_value>".to_string();
+            if key.is_none() && value.is_empty() {
+                return "Error: 'update' コマンドには <key> と <new_value> が必要です。\n使用方法: update <key> <new_value>".to_string();
+            } else if key.is_none() {
+                return "Error: 'update' コマンドには <key> が必要です。\n使用方法: update <key> <new_value>".to_string();
+            } else if value.is_empty() {
+                return "Error: 'update' コマンドには <new_value> が必要です。\n使用方法: update <key> <new_value>".to_string();
             }
             let key = key.unwrap();
             if !store.contains_key(key) {
-                return format!("Key '{}' does not exist.", key);
+                return format!("Error: Key '{}' は存在しません。", key);
             }
             let value_str = value.join(" ");
             let parsed_value = parse_value(&value_str);
@@ -103,13 +115,13 @@ fn process_command(
                     store.insert(key.to_string(), val.clone());
                     format!("Updated key '{}' with new value '{:?}'", key, val)
                 }
-                None => "Unsupported value type. Supported types: String, Integer, Boolean, Map, List, Set".to_string(),
+                None => "Error: サポートされていない値の型です。\nサポートされている型: String, Integer, Boolean, Map, List, Set".to_string(),
             }
         }
         Some("list") => {
             let extra_args: Vec<&str> = parts.collect();
             if !extra_args.is_empty() {
-                return "Usage: list".to_string();
+                return "Error: 'list' コマンドには引数が不要です。\n使用方法: list".to_string();
             }
             if store.is_empty() {
                 "Store is empty.".to_string()
@@ -121,7 +133,7 @@ fn process_command(
         Some("help") => {
             let extra_args: Vec<&str> = parts.collect();
             if !extra_args.is_empty() {
-                return "Usage: help".to_string();
+                return "Error: 'help' コマンドには引数が不要です。\n使用方法: help".to_string();
             }
             format!(
                 "利用可能なコマンド:\n\
@@ -138,7 +150,8 @@ fn process_command(
         Some("history") => {
             let extra_args: Vec<&str> = parts.collect();
             if !extra_args.is_empty() {
-                return "Usage: history".to_string();
+                return "Error: 'history' コマンドには引数が不要です。\n使用方法: history"
+                    .to_string();
             }
             if history.is_empty() {
                 "No commands in history.".to_string()
@@ -153,7 +166,13 @@ fn process_command(
             }
         }
         Some("exit") => "Exiting...".to_string(),
-        _ => "Unknown command".to_string(),
+        Some(cmd) => format!(
+            "Error: Unknown command '{}'.\nUse 'help' to see available commands.",
+            cmd
+        ),
+        None => {
+            "Error: コマンドを入力してください。\nUse 'help' to see available commands.".to_string()
+        }
     }
 }
 
@@ -193,7 +212,7 @@ mod tests {
         let mut store = BTreeMap::new();
         let history = Vec::new();
         let output = process_command(&mut store, "delete key2", &history);
-        assert_eq!(output, "Key 'key2' not found.");
+        assert_eq!(output, "Error: Key 'key2' が見つかりません。");
     }
 
     #[test]
@@ -201,7 +220,10 @@ mod tests {
         let mut store = BTreeMap::new();
         let history = Vec::new();
         let output = process_command(&mut store, "delete", &history);
-        assert_eq!(output, "Usage: delete <key>");
+        assert_eq!(
+            output,
+            "Error: 'delete' コマンドには <key> が必要です。\n使用方法: delete <key>"
+        );
     }
 
     #[test]
@@ -225,7 +247,7 @@ mod tests {
         let mut store = BTreeMap::new();
         let history = Vec::new();
         let output = process_command(&mut store, "update key2 100", &history);
-        assert_eq!(output, "Key 'key2' does not exist.");
+        assert_eq!(output, "Error: Key 'key2' は存在しません。");
     }
 
     #[test]
@@ -233,7 +255,10 @@ mod tests {
         let mut store = BTreeMap::new();
         let history = Vec::new();
         let output = process_command(&mut store, "update key3", &history);
-        assert_eq!(output, "Usage: update <key> <new_value>");
+        assert_eq!(
+            output,
+            "Error: 'update' コマンドには <new_value> が必要です。\n使用方法: update <key> <new_value>"
+        );
     }
 
     #[test]
@@ -259,7 +284,10 @@ mod tests {
         let mut store = BTreeMap::new();
         let history = Vec::new();
         let output = process_command(&mut store, "list extra_arg", &history);
-        assert_eq!(output, "Usage: list");
+        assert_eq!(
+            output,
+            "Error: 'list' コマンドには引数が不要です。\n使用方法: list"
+        );
     }
 
     #[test]
@@ -284,7 +312,10 @@ mod tests {
         let mut store = BTreeMap::new();
         let history = Vec::new();
         let output = process_command(&mut store, "help extra_arg", &history);
-        assert_eq!(output, "Usage: help");
+        assert_eq!(
+            output,
+            "Error: 'help' コマンドには引数が不要です。\n使用方法: help"
+        );
     }
 
     #[test]
@@ -311,6 +342,67 @@ mod tests {
         let mut store = BTreeMap::new();
         let history = Vec::new();
         let output = process_command(&mut store, "history extra_arg", &history);
-        assert_eq!(output, "Usage: history");
+        assert_eq!(
+            output,
+            "Error: 'history' コマンドには引数が不要です。\n使用方法: history"
+        );
+    }
+
+    #[test]
+    fn test_unknown_command() {
+        let mut store = BTreeMap::new();
+        let history = Vec::new();
+        let output = process_command(&mut store, "unknown_cmd", &history);
+        assert_eq!(
+            output,
+            "Error: Unknown command 'unknown_cmd'.\nUse 'help' to see available commands."
+        );
+    }
+
+    #[test]
+    fn test_empty_input() {
+        let mut store = BTreeMap::new();
+        let history = Vec::new();
+        let output = process_command(&mut store, "", &history);
+        assert_eq!(
+            output,
+            "Error: コマンドを入力してください。\nUse 'help' to see available commands."
+        );
+    }
+
+    #[test]
+    fn test_set_and_get_integer() {
+        let mut store = BTreeMap::new();
+        let history = Vec::new();
+        let output_set = process_command(&mut store, "set age 30", &history);
+        assert_eq!(output_set, "Set key 'age' with value 'Integer(30)'");
+        let output_get = process_command(&mut store, "get age", &history);
+        assert_eq!(output_get, "Value for key 'age': 'Integer(30)'");
+    }
+
+    #[test]
+    fn test_set_and_get_boolean() {
+        let mut store = BTreeMap::new();
+        let history = Vec::new();
+        let output_set = process_command(&mut store, "set is_active true", &history);
+        assert_eq!(output_set, "Set key 'is_active' with value 'Boolean(true)'");
+        let output_get = process_command(&mut store, "get is_active", &history);
+        assert_eq!(output_get, "Value for key 'is_active': 'Boolean(true)'");
+    }
+
+    #[test]
+    fn test_set_and_get_string() {
+        let mut store = BTreeMap::new();
+        let history = Vec::new();
+        let output_set = process_command(&mut store, "set greeting \"こんにちは\"", &history);
+        assert_eq!(
+            output_set,
+            "Set key 'greeting' with value 'String(\"こんにちは\")'"
+        );
+        let output_get = process_command(&mut store, "get greeting", &history);
+        assert_eq!(
+            output_get,
+            "Value for key 'greeting': 'String(\"こんにちは\")'"
+        );
     }
 }
